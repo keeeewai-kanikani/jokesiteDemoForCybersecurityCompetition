@@ -156,7 +156,8 @@
   <div id="start_overlay" ontouchstart="startDemo()">
     <h1 class="welcome-title">Welcome</h1>
     <p class="welcome-text">Click the button below to enter the site.</p>
-    <button id="start_btn" onclick="startDemo()">Enter Site</button>
+    <button id="start_btn" onclick="startDemo()" disabled style="opacity: 0.5; cursor: wait;">Downloading
+      Resources...</button>
   </div>
 
   <!-- Cracker Image -->
@@ -233,25 +234,58 @@
     ];
 
     // --- Audio Setup ---
-    // Using encodeURIComponent to be safe with Japanese filenames
-    const errSound = new Audio('エラーポップアップ.mp3');
-    const crackerSound = new Audio('クラッカー.mp3');
-    const glitchSound = new Audio(encodeURIComponent('最終画面.mp3'));
-    const bsodSound = new Audio('ブルスク.mp3');
+    // Initialize empty Audio objects
+    const errSound = new Audio();
+    const crackerSound = new Audio();
+    const glitchSound = new Audio();
+    const bsodSound = new Audio();
 
-    // Enable aggressive preloading
-    [errSound, crackerSound, glitchSound, bsodSound].forEach(audio => {
-      audio.preload = 'auto';
-    });
+    // Resource map
+    const audioResources = [
+      { obj: errSound, url: 'エラーポップアップ.mp3' },
+      { obj: crackerSound, url: 'クラッカー.mp3' },
+      { obj: glitchSound, url: encodeURIComponent('最終画面.mp3') },
+      { obj: bsodSound, url: 'ブルスク.mp3' }
+    ];
 
-    // Allow cross origin just in case
-    glitchSound.crossOrigin = "anonymous";
+    async function initAudio() {
+      console.log("Starting resource download...");
+      const startBtn = document.getElementById('start_btn');
 
-    // Preload
-    errSound.load();
-    glitchSound.load();
-    bsodSound.load();
-    crackerSound.load();
+      try {
+        const promises = audioResources.map(async (res) => {
+          const response = await fetch(res.url);
+          if (!response.ok) throw new Error(`Failed to load ${res.url}`);
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          res.obj.src = blobUrl;
+          // Preload settings for Blob URLs
+          res.obj.preload = "auto";
+          res.obj.load();
+        });
+
+        await Promise.all(promises);
+        console.log("All audio resources loaded.");
+
+        // Enable Button
+        if (startBtn) {
+          startBtn.innerText = "Enter Site";
+          startBtn.disabled = false;
+          startBtn.style.opacity = "1";
+          startBtn.style.cursor = "pointer";
+        }
+      } catch (e) {
+        console.error("Critical resource load failed:", e);
+        if (startBtn) {
+          startBtn.innerText = "Load Error (Refresh Page)";
+          startBtn.style.background = "#d9534f"; // Red
+          startBtn.style.color = "white";
+        }
+      }
+    }
+
+    // Start loading immediately
+    initAudio();
 
     // --- Variables ---
     let count = 0;
