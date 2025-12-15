@@ -54,14 +54,20 @@
       color: white;
       border: none;
       border-radius: 4px;
-      cursor: pointer;
+      cursor: wait;
       transition: background-color 0.2s;
       margin-top: 20px;
       outline: none;
+      opacity: 0.5;
     }
 
     #start_btn:hover {
       background-color: #005a9e;
+    }
+
+    #start_btn:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
     }
 
     h1.welcome-title {
@@ -152,12 +158,11 @@
 <body>
 
   <!-- Phase 1: Start Overlay -->
-  <!-- Add ontouchstart for better mobile response -->
-  <div id="start_overlay" ontouchstart="startDemo()">
+  <!-- Remove ontouchstart to rely on click (which works everywhere) -->
+  <div id="start_overlay">
     <h1 class="welcome-title">Welcome</h1>
     <p class="welcome-text">Click the button below to enter the site.</p>
-    <button id="start_btn" onclick="startDemo()" disabled style="opacity: 0.5; cursor: wait;">Downloading
-      Resources...</button>
+    <button id="start_btn" onclick="startDemo()" disabled>Downloading Resources...</button>
   </div>
 
   <!-- Cracker Image -->
@@ -233,39 +238,50 @@
       "Keyboard not found. Press F1 to continue.", "Your computer is affected by critical vulnerabilities.", "Fatal Exception 0xE0000000", "Memory Overflow!"
     ];
 
-    // --- Audio Setup ---
-    // Initialize empty Audio objects
-    const errSound = new Audio();
-    const crackerSound = new Audio();
-    const glitchSound = new Audio();
-    const bsodSound = new Audio();
+    // --- Web Audio API Setup ---
+    let audioCtx;
+    const buffers = {};
 
     // Resource map
     const audioResources = [
-      { obj: errSound, url: 'エラーポップアップ.mp3' },
-      { obj: crackerSound, url: 'クラッカー.mp3' },
-      { obj: glitchSound, url: encodeURIComponent('最終画面.mp3') },
-      { obj: bsodSound, url: 'ブルスク.mp3' }
+      { key: 'err', url: 'エラーポップアップ.mp3' },
+      { key: 'cracker', url: 'クラッカー.mp3' },
+      { key: 'glitch', url: encodeURIComponent('最終画面.mp3') },
+      { key: 'bsod', url: 'ブルスク.mp3' }
     ];
 
+    // Helper: Play a buffer
+    // Returns the source node so we can stop it or check state if needed
+    function playSound(bufferKey, loop = false) {
+      if (!audioCtx || !buffers[bufferKey]) return null;
+
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffers[bufferKey];
+      source.connect(audioCtx.destination);
+      source.loop = loop;
+      source.start(0);
+      return source;
+    }
+
     async function initAudio() {
-      console.log("Starting resource download...");
+      console.log("Starting resource download (Web Audio API)...");
       const startBtn = document.getElementById('start_btn');
+
+      // Setup AudioContext (safely)
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContext();
 
       try {
         const promises = audioResources.map(async (res) => {
           const response = await fetch(res.url);
           if (!response.ok) throw new Error(`Failed to load ${res.url}`);
-          const blob = await response.blob();
-          const blobUrl = URL.createObjectURL(blob);
-          res.obj.src = blobUrl;
-          // Preload settings for Blob URLs
-          res.obj.preload = "auto";
-          res.obj.load();
+          const arrayBuffer = await response.arrayBuffer();
+          const decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+          buffers[res.key] = decodedBuffer;
         });
 
         await Promise.all(promises);
-        console.log("All audio resources loaded.");
+        console.log("All audio resources loaded and decoded.");
 
         // Enable Button
         if (startBtn) {
@@ -292,7 +308,6 @@
     const maxWindows = 20;
 
     // Extracted from 反転.mid (Assuming 120BPM)
-    // Intervals in milliseconds where visual should be INVERTED
     const glitchIntervals = [
       { start: 3250, end: 3500 },
       { start: 5000, end: 5125 },
@@ -329,8 +344,8 @@
       win.style.zIndex = 1000 + index;
       win.querySelector('.win-title').innerText = "System Warning #" + index;
 
-      errSound.currentTime = 0;
-      errSound.play().catch(() => { });
+      // Play Error Sound
+      playSound('err');
     }
 
     // Prevent double firing if touch and click both happen
@@ -344,58 +359,33 @@
       const startBtn = document.getElementById('start_btn');
       const overlayContent = overlay.querySelectorAll('h1, p, button');
 
-      // 0. UI Feedback (Instant)
-      // Change button to indicate loading, so user knows interaction was received
+      // 0. Resume Audio Context (Critical for Mobile)
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(e => console.error("Audio resume failed:", e));
+      }
+
+      // 1. UI Feedback
       if (startBtn) {
-        startBtn.innerHTML = "Loading...";
-        startBtn.style.opacity = "0.7";
+        startBtn.innerHTML = "Processing...";
         startBtn.style.cursor = "wait";
       }
 
-      // --- Mobile Audio Unlock Strategy ---
-      // 1. "Warm up" all audio elements
-      // We await this to ensure audio is buffered and the 'play' token is valid
-      const warmupAudio = async (audio) => {
-        // Set preload just in case
-        audio.preload = 'auto';
-
-        try {
-          audio.muted = true; // Use MUTED to avoid noise
-          await audio.play();
-          audio.pause();
-          audio.currentTime = 0;
-          audio.muted = false; // Unmute for later use
-        } catch (e) {
-          console.warn("Audio warmup/load failed (non-fatal)", e);
-        }
-      };
-
-      // Run warmups in parallel
-      await Promise.all([errSound, crackerSound, glitchSound, bsodSound].map(warmupAudio));
-
-      // 3. Hide text ONLY (Now that audio is ready)
+      // 2. Hide text
       if (overlayContent) {
         overlayContent.forEach(el => el.style.display = 'none');
       }
 
-      // 4. Play Cracker (Real playback)
-      // Since we are now "warmed up", playback should be instant.
-      // We keep the logic aligned: Show GIF -> Wait -> Sound? 
-      // OR Sound -> Wait -> GIF?
-      // Original logic: Show GIF (now), Sound (300ms later).
-      // We keep this timing, but now we are confident sound WILL play at T+300ms.
-
+      // 3. Play Cracker (Scheduled slightly in future or immediately)
+      // Visual sync delay
       setTimeout(() => {
-        crackerSound.currentTime = 0;
-        crackerSound.muted = false;
-        crackerSound.play().catch(e => console.error(e));
+        playSound('cracker');
       }, 300);
 
-      // 5. Show GIF
+      // 4. Show GIF
       const anim = document.getElementById('cracker_gif');
       if (anim) anim.style.display = 'block';
 
-      // 6. Wait for Phase 2 (Chaos)
+      // 5. Wait for Phase 2 (Chaos)
       setTimeout(() => {
         if (anim) anim.style.display = 'none';
         overlay.style.display = 'none';
@@ -404,7 +394,6 @@
         const interval = setInterval(() => {
           if (count >= maxWindows) {
             clearInterval(interval);
-            // Phase 2 finished spawning, wait a bit then start Phase 3
             setTimeout(startGlitchPhase, 2000);
             return;
           }
@@ -412,7 +401,7 @@
           count++;
         }, 200);
 
-      }, 1800); // 1.8s delay total for cracker phase
+      }, 1800);
     }
 
     function startGlitchPhase() {
@@ -421,53 +410,52 @@
       const glitchOverlay = document.getElementById('glitch_overlay');
       const skullHandler = glitchOverlay.querySelector('.skull-emoji');
 
-      glitchOverlay.style.display = 'flex'; // Use flex to center skull
+      glitchOverlay.style.display = 'flex';
       skullHandler.style.display = 'block';
 
-      // Play Sound
-      const playPromise = glitchSound.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          console.error("Glitch sound play failed:", error);
-          // Fallback
-          setTimeout(startBSOD, 5000);
-        });
+      // Play Sound and track start time for sync
+      const glitchSource = playSound('glitch');
+      const startTime = audioCtx.currentTime;
+
+      if (!glitchSource) {
+        // Fallback if sound failed
+        setTimeout(startBSOD, 5000);
+        return;
       }
 
-      // Use requestAnimationFrame to sync visual effects with audio time
+      // Sync visual effects
       function updateGlitch() {
-        if (glitchSound.paused) return;
+        // Approximate check if sound finished
+        if (!buffers['glitch']) return;
+        const duration = buffers['glitch'].duration;
+        const elapsed = audioCtx.currentTime - startTime;
+
+        if (elapsed > duration) {
+          // Sound ended
+          startBSOD();
+          return;
+        }
 
         requestAnimationFrame(updateGlitch);
 
-        const currentTimeMs = glitchSound.currentTime * 1000;
+        const currentTimeMs = elapsed * 1000;
 
-        // Check if we are inside any "active" interval
+        // Check active interval
         const isActive = glitchIntervals.some(interval =>
           currentTimeMs >= interval.start && currentTimeMs <= interval.end
         );
 
         if (isActive) {
-          // Invert Color
           glitchOverlay.style.filter = 'invert(1)';
-
-          // Shake Effect
           const rx = (Math.random() - 0.5) * 40;
           const ry = (Math.random() - 0.5) * 40;
           glitchOverlay.style.transform = `translate(${rx}px, ${ry}px)`;
         } else {
-          // Normal State
           glitchOverlay.style.filter = 'none';
           glitchOverlay.style.transform = 'none';
         }
       }
       updateGlitch();
-
-      // Chain to Phase 4 (BSOD) when sound ends
-      glitchSound.onended = () => {
-        console.log("Glitch sound ended");
-        startBSOD();
-      };
     }
 
     function startBSOD() {
@@ -477,7 +465,7 @@
 
       document.getElementById('glitch_overlay').style.display = 'none';
 
-      bsodSound.play().catch(e => console.error("BSOD sound failed", e));
+      playSound('bsod');
     }
 
   </script>
