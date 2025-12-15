@@ -239,6 +239,11 @@
     const glitchSound = new Audio(encodeURIComponent('最終画面.mp3'));
     const bsodSound = new Audio('ブルスク.mp3');
 
+    // Enable aggressive preloading
+    [errSound, crackerSound, glitchSound, bsodSound].forEach(audio => {
+      audio.preload = 'auto';
+    });
+
     // Allow cross origin just in case
     glitchSound.crossOrigin = "anonymous";
 
@@ -246,6 +251,7 @@
     errSound.load();
     glitchSound.load();
     bsodSound.load();
+    crackerSound.load();
 
     // --- Variables ---
     let count = 0;
@@ -296,37 +302,55 @@
     // Prevent double firing if touch and click both happen
     let demoStarted = false;
 
-    function startDemo() {
+    async function startDemo() {
       if (demoStarted) return;
       demoStarted = true;
 
       const overlay = document.getElementById('start_overlay');
+      const startBtn = document.getElementById('start_btn');
       const overlayContent = overlay.querySelectorAll('h1, p, button');
 
+      // 0. UI Feedback (Instant)
+      // Change button to indicate loading, so user knows interaction was received
+      if (startBtn) {
+        startBtn.innerHTML = "Loading...";
+        startBtn.style.opacity = "0.7";
+        startBtn.style.cursor = "wait";
+      }
+
       // --- Mobile Audio Unlock Strategy ---
-      // 1. Resume AudioContext (if we were using it, currently optional but good practice)
-      // initAudioContext();
+      // 1. "Warm up" all audio elements
+      // We await this to ensure audio is buffered and the 'play' token is valid
+      const warmupAudio = async (audio) => {
+        // Set preload just in case
+        audio.preload = 'auto';
 
-      // 2. "Warm up" all audio elements
-      // Use MUTED instead of volume=0 to be safer and avoid noise leaks on some devices
-      [errSound, crackerSound, glitchSound, bsodSound].forEach(audio => {
-        if (audio.paused) {
-          audio.muted = true; // IMPORTANT: Mute during warm-up
-          const p = audio.play();
-          if (p !== undefined) {
-            p.then(() => {
-              audio.pause();
-              audio.currentTime = 0;
-              audio.muted = false; // Unmute for later use
-            }).catch(e => console.log("Audio warmup failed", e));
-          }
+        try {
+          audio.muted = true; // Use MUTED to avoid noise
+          await audio.play();
+          audio.pause();
+          audio.currentTime = 0;
+          audio.muted = false; // Unmute for later use
+        } catch (e) {
+          console.warn("Audio warmup/load failed (non-fatal)", e);
         }
-      });
+      };
 
-      // 3. Hide text ONLY
-      overlayContent.forEach(el => el.style.display = 'none');
+      // Run warmups in parallel
+      await Promise.all([errSound, crackerSound, glitchSound, bsodSound].map(warmupAudio));
+
+      // 3. Hide text ONLY (Now that audio is ready)
+      if (overlayContent) {
+        overlayContent.forEach(el => el.style.display = 'none');
+      }
 
       // 4. Play Cracker (Real playback)
+      // Since we are now "warmed up", playback should be instant.
+      // We keep the logic aligned: Show GIF -> Wait -> Sound? 
+      // OR Sound -> Wait -> GIF?
+      // Original logic: Show GIF (now), Sound (300ms later).
+      // We keep this timing, but now we are confident sound WILL play at T+300ms.
+
       setTimeout(() => {
         crackerSound.currentTime = 0;
         crackerSound.muted = false;
@@ -354,7 +378,7 @@
           count++;
         }, 200);
 
-      }, 1800); // 2.0s delay for cracker
+      }, 1800); // 1.8s delay total for cracker phase
     }
 
     function startGlitchPhase() {
