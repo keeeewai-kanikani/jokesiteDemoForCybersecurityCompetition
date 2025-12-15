@@ -243,15 +243,16 @@
     const buffers = {};
 
     // Resource map
+    // Resource map
+    // We encode ALL filenames to ensure safe fetching on Linux/Unix servers (GitHub Pages)
     const audioResources = [
-      { key: 'err', url: 'エラーポップアップ.mp3' },
-      { key: 'cracker', url: 'クラッカー.mp3' },
+      { key: 'err', url: encodeURIComponent('エラーポップアップ.mp3') },
+      { key: 'cracker', url: encodeURIComponent('クラッカー.mp3') },
       { key: 'glitch', url: encodeURIComponent('最終画面.mp3') },
-      { key: 'bsod', url: 'ブルスク.mp3' }
+      { key: 'bsod', url: encodeURIComponent('ブルスク.mp3') }
     ];
 
     // Helper: Play a buffer
-    // Returns the source node so we can stop it or check state if needed
     function playSound(bufferKey, loop = false) {
       if (!audioCtx || !buffers[bufferKey]) return null;
 
@@ -263,6 +264,18 @@
       return source;
     }
 
+    // Global Unlocker for Mobile Safari / Audio Policies
+    function unlockAudio() {
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().then(() => {
+          // Remove listeners once resumed
+          ['click', 'touchstart', 'touchend', 'pointerdown'].forEach(event => {
+            document.removeEventListener(event, unlockAudio);
+          });
+        }).catch(e => console.error("Unlock failed", e));
+      }
+    }
+
     async function initAudio() {
       console.log("Starting resource download (Web Audio API)...");
       const startBtn = document.getElementById('start_btn');
@@ -270,6 +283,11 @@
       // Setup AudioContext (safely)
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       audioCtx = new AudioContext();
+
+      // Add aggressive unlock listeners
+      ['click', 'touchstart', 'touchend', 'pointerdown'].forEach(event => {
+        document.addEventListener(event, unlockAudio, { once: false });
+      });
 
       try {
         const promises = audioResources.map(async (res) => {
