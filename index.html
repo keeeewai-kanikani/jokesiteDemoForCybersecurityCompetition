@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>System Error</title>
+
+  <!-- Local WindowManager CSS (XP Style for virus look) -->
+  <link rel="stylesheet" href="window_manager_library-main/window_common.css">
+  <link rel="stylesheet" href="window_manager_library-main/window_xp.css">
+
+  <style>
+    body {
+      margin: 0;
+      background: #0000AA;
+      /* Blue Screen color base */
+      overflow: hidden;
+      height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      cursor: wait;
+    }
+
+    #window_container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* Start Overlay - Friendly Design */
+    #start_overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #ffffff;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+      font-family: 'Segoe UI', sans-serif;
+      cursor: default;
+    }
+
+    #start_btn {
+      padding: 15px 40px;
+      font-size: 18px;
+      background-color: #0078d4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      margin-top: 20px;
+      outline: none;
+    }
+
+    #start_btn:hover {
+      background-color: #005a9e;
+    }
+
+    h1.welcome-title {
+      font-weight: 300;
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    p.welcome-text {
+      font-size: 16px;
+      color: #666;
+    }
+
+    /* Cracker Animation */
+    #cracker_gif {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10000;
+      pointer-events: none;
+      max-width: 80vw;
+      max-height: 80vh;
+    }
+
+    /* Glitch Overlay (Phase 3) */
+    #glitch_overlay {
+      display: none;
+      /* Changed: ensure it IS hidden by default */
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: black;
+      z-index: 20000;
+      overflow: hidden;
+      pointer-events: none;
+
+      /* Flex properties for when it becomes visible */
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Skull Emoji */
+    .skull-emoji {
+      font-size: 15vw;
+      /* Large fluid size */
+      display: none;
+      /* Hidden by default, shown during glitch phase */
+    }
+
+    /* BSOD Screen (Phase 4) */
+    #bsod_screen {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #0078d7;
+      /* Modern BSOD blue or sticking to #0000AA */
+      color: white;
+      z-index: 30000;
+      padding: 10%;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .bsod-face {
+      font-size: 100px;
+      margin-bottom: 20px;
+    }
+
+    .bsod-title {
+      font-size: 32px;
+      margin-bottom: 20px;
+    }
+
+    .bsod-text {
+      font-size: 18px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Phase 1: Start Overlay -->
+  <!-- Add ontouchstart for better mobile response -->
+  <div id="start_overlay" ontouchstart="startDemo()">
+    <h1 class="welcome-title">Welcome</h1>
+    <p class="welcome-text">Click the button below to enter the site.</p>
+    <button id="start_btn" onclick="startDemo()">Enter Site</button>
+  </div>
+
+  <!-- Cracker Image -->
+  <img id="cracker_gif" src="cracker.gif" alt="Cracker Animation">
+
+  <!-- Phase 2: Window Container -->
+  <div id="window_container"></div>
+
+  <!-- Phase 3: Glitch Overlay -->
+  <div id="glitch_overlay">
+    <div class="skull-emoji">💀</div>
+  </div>
+
+  <!-- Phase 4: BSOD -->
+  <div id="bsod_screen">
+    <div class="bsod-face">:(</div>
+    <div class="bsod-title">Error</div>
+    <div class="bsod-text">To reinstate, please transfer the payment to the designated account.</div>
+  </div>
+
+  <!-- Window Template -->
+  <template id="window_template">
+    <div class="win" style="width: 100px; height: 75px;">
+      <nav class="win-titlebar win-drag-handle">
+        <span class="win-icon">⚠️</span>
+        <span class="win-title win-drag-handle">System Warning</span>
+        <button class="win-btn win-btn-minimize" onclick="wm.minimize_window(this.closest('.win'))">_</button>
+        <button class="win-btn win-btn-restore hidden" onclick="wm.restore_window(this.closest('.win'))">□</button>
+        <button class="win-btn win-btn-maximize" onclick="wm.maximize_window(this.closest('.win'))">□</button>
+        <button class="win-btn win-btn-close" onclick="wm.remove_window(this.closest('.win'))">×</button>
+      </nav>
+      <iframe class="win-iframe"></iframe>
+      <div class="win-resize-handle"></div>
+    </div>
+  </template>
+
+  <!-- WindowManager JS -->
+  <script src="window_manager_library-main/WindowManager.js"></script>
+
+  <script>
+    // --- Window Manager Setup ---
+    const wm = new WindowManager(document.getElementById("window_container"), document.getElementById("window_template"), false);
+    wm.register_mouse_events(window);
+    wm.register_message_events();
+    wm.window_snapping = false;
+
+    // --- Content Generators ---
+    function createWarningContent(text) {
+      const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { background-color: #f0f0f0; color: black; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; font-family: sans-serif; text-align: center; }
+                    h1 { color: red; font-size: 24px; margin: 0; }
+                    p { font-size: 14px; }
+                    .icon { font-size: 48px; margin-bottom: 10px; }
+                    button { margin-top: 10px; padding: 5px 15px; }
+                </style>
+            </head>
+            <body>
+                <div class="icon">❌</div>
+                <h1>ERROR</h1>
+                <p>${text}</p>
+                <button onclick="parent.postMessage({command:'close'}, '*')">OK</button>
+            </body>
+            </html>`;
+      return 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+    }
+
+    const messages = [
+      "System files corrupted!", "Virus detected in C:/System32", "Unauthorized access attempt!", "Deleting hard drive...",
+      "Keyboard not found. Press F1 to continue.", "Your computer is affected by critical vulnerabilities.", "Fatal Exception 0xE0000000", "Memory Overflow!"
+    ];
+
+    // --- Audio Setup ---
+    // Using encodeURIComponent to be safe with Japanese filenames
+    const errSound = new Audio('エラーポップアップ.mp3');
+    const crackerSound = new Audio('クラッカー.mp3');
+    const glitchSound = new Audio(encodeURIComponent('最終画面.mp3'));
+    const bsodSound = new Audio('ブルスク.mp3');
+
+    // Allow cross origin just in case
+    glitchSound.crossOrigin = "anonymous";
+
+    // Preload
+    errSound.load();
+    glitchSound.load();
+    bsodSound.load();
+
+    // --- Variables ---
+    let count = 0;
+    const maxWindows = 20;
+
+    // Extracted from 反転.mid (Assuming 120BPM)
+    // Intervals in milliseconds where visual should be INVERTED
+    const glitchIntervals = [
+      { start: 3250, end: 3500 },
+      { start: 5000, end: 5125 },
+      { start: 6500, end: 6625 },
+      { start: 7000, end: 10000 }
+    ];
+
+    // --- Main Logic ---
+
+    function spawnWindow(index) {
+      const baseW = 200;
+      const baseH = 150;
+      const w = Math.min(baseW, window.innerWidth * 0.8);
+      const h = Math.min(baseH, window.innerHeight * 0.4);
+      let x, y;
+
+      if (index <= 8) {
+        const step = 30; // pixels per step
+        const startX = 20;
+        const startY = 20;
+        x = startX + (index - 1) * step;
+        y = startY + (index - 1) * step;
+      } else {
+        x = Math.random() * (window.innerWidth - w);
+        y = Math.random() * (window.innerHeight - h);
+      }
+
+      const msg = messages[Math.floor(Math.random() * messages.length)];
+      const win = wm.add_window(createWarningContent(msg));
+      win.style.left = x + "px";
+      win.style.top = y + "px";
+      win.style.width = w + "px";
+      win.style.height = h + "px";
+      win.style.zIndex = 1000 + index;
+      win.querySelector('.win-title').innerText = "System Warning #" + index;
+
+      errSound.currentTime = 0;
+      errSound.play().catch(() => { });
+    }
+
+    // Prevent double firing if touch and click both happen
+    let demoStarted = false;
+
+    function startDemo() {
+      if (demoStarted) return;
+      demoStarted = true;
+
+      const overlay = document.getElementById('start_overlay');
+      const overlayContent = overlay.querySelectorAll('h1, p, button');
+
+      // --- Mobile Audio Unlock Strategy ---
+      // 1. Resume AudioContext (if we were using it, currently optional but good practice)
+      // initAudioContext();
+
+      // 2. "Warm up" all audio elements
+      // Use MUTED instead of volume=0 to be safer and avoid noise leaks on some devices
+      [errSound, crackerSound, glitchSound, bsodSound].forEach(audio => {
+        if (audio.paused) {
+          audio.muted = true; // IMPORTANT: Mute during warm-up
+          const p = audio.play();
+          if (p !== undefined) {
+            p.then(() => {
+              audio.pause();
+              audio.currentTime = 0;
+              audio.muted = false; // Unmute for later use
+            }).catch(e => console.log("Audio warmup failed", e));
+          }
+        }
+      });
+
+      // 3. Hide text ONLY
+      overlayContent.forEach(el => el.style.display = 'none');
+
+      // 4. Play Cracker (Real playback)
+      setTimeout(() => {
+        crackerSound.currentTime = 0;
+        crackerSound.muted = false;
+        crackerSound.play().catch(e => console.error(e));
+      }, 300);
+
+      // 5. Show GIF
+      const anim = document.getElementById('cracker_gif');
+      if (anim) anim.style.display = 'block';
+
+      // 6. Wait for Phase 2 (Chaos)
+      setTimeout(() => {
+        if (anim) anim.style.display = 'none';
+        overlay.style.display = 'none';
+
+        // Start Chaos
+        const interval = setInterval(() => {
+          if (count >= maxWindows) {
+            clearInterval(interval);
+            // Phase 2 finished spawning, wait a bit then start Phase 3
+            setTimeout(startGlitchPhase, 2000);
+            return;
+          }
+          spawnWindow(count + 1);
+          count++;
+        }, 200);
+
+      }, 1800); // 2.0s delay for cracker
+    }
+
+    function startGlitchPhase() {
+      console.log("Starting Glitch Phase");
+
+      const glitchOverlay = document.getElementById('glitch_overlay');
+      const skullHandler = glitchOverlay.querySelector('.skull-emoji');
+
+      glitchOverlay.style.display = 'flex'; // Use flex to center skull
+      skullHandler.style.display = 'block';
+
+      // Play Sound
+      const playPromise = glitchSound.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.error("Glitch sound play failed:", error);
+          // Fallback
+          setTimeout(startBSOD, 5000);
+        });
+      }
+
+      // Use requestAnimationFrame to sync visual effects with audio time
+      function updateGlitch() {
+        if (glitchSound.paused) return;
+
+        requestAnimationFrame(updateGlitch);
+
+        const currentTimeMs = glitchSound.currentTime * 1000;
+
+        // Check if we are inside any "active" interval
+        const isActive = glitchIntervals.some(interval =>
+          currentTimeMs >= interval.start && currentTimeMs <= interval.end
+        );
+
+        if (isActive) {
+          // Invert Color
+          glitchOverlay.style.filter = 'invert(1)';
+
+          // Shake Effect
+          const rx = (Math.random() - 0.5) * 40;
+          const ry = (Math.random() - 0.5) * 40;
+          glitchOverlay.style.transform = `translate(${rx}px, ${ry}px)`;
+        } else {
+          // Normal State
+          glitchOverlay.style.filter = 'none';
+          glitchOverlay.style.transform = 'none';
+        }
+      }
+      updateGlitch();
+
+      // Chain to Phase 4 (BSOD) when sound ends
+      glitchSound.onended = () => {
+        console.log("Glitch sound ended");
+        startBSOD();
+      };
+    }
+
+    function startBSOD() {
+      console.log("Starting BSOD Phase");
+      const bsod = document.getElementById('bsod_screen');
+      bsod.style.display = 'block';
+
+      document.getElementById('glitch_overlay').style.display = 'none';
+
+      bsodSound.play().catch(e => console.error("BSOD sound failed", e));
+    }
+
+  </script>
+
+</body>
+
+</html>
